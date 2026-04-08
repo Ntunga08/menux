@@ -1,15 +1,19 @@
 datasource db {
   provider = "postgresql"
- 
+  url      = env("DATABASE_URL")
 }
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
 }
 
-enum UserRole {
-  ADMIN
-  STAFF
+// ─── ENUMS ───────────────────────────────────────────────
+
+enum StaffRole {
+  MANAGER
+  WAITER
+  CHEF
+  CASHIER
 }
 
 enum TableStatus {
@@ -17,6 +21,15 @@ enum TableStatus {
   OCCUPIED
   RESERVED
   OUT_OF_SERVICE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
 }
 
 enum RequestType {
@@ -34,50 +47,99 @@ enum RequestStatus {
   CANCELLED
 }
 
-model User {
+// ─── MODELS ──────────────────────────────────────────────
+
+// The SaaS customer — pays you, owns restaurants
+model Owner {
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  passwordHash String
+  plan         String       @default("free") // free | pro | enterprise
+  isActive     Boolean      @default(true)
+  restaurants  Restaurant[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+// One owner can have multiple branches
+model Restaurant {
+  id           Int              @id @default(autoincrement())
+  name         String
+  logoUrl      String?
+  address      String?
+  currency     String           @default("USD")
+  subdomain    String           @unique
+  isActive     Boolean          @default(true)
+  ownerId      Int
+  owner        Owner            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  staff        Staff[]
+  tables       Table[]
+  categories   MenuCategory[]
+  orders       Order[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([ownerId])
+}
+
+// Waiters, chefs, managers etc — invited by owner
+model Staff {
   id               Int              @id @default(autoincrement())
-  name             String
-  email            String           @unique
-  passwordHash     String
-  role             UserRole
+  name             String?
+  email            String
+  passwordHash     String?
+  role             StaffRole
+  fcmToken         String?          // phone push notification token
+  inviteToken      String?          @unique
+  inviteAccepted   Boolean          @default(false)
   isActive         Boolean          @default(true)
+  restaurantId     Int
+  restaurant       Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   resolvedRequests ServiceRequest[] @relation("ResolvedBy")
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
+  @@unique([restaurantId, email])  // same email can work at 2 restaurants
+  @@index([restaurantId])
   @@index([role])
-  @@index([isActive])
 }
 
 model Table {
-  id          Int              @id @default(autoincrement())
-  tableNumber Int              @unique
-  qrCodeValue String           @unique
-  capacity    Int
-  status      TableStatus      @default(AVAILABLE)
-  section     String?
-  isActive    Boolean          @default(true)
-  requests    ServiceRequest[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id           Int              @id @default(autoincrement())
+  tableNumber  Int
+  qrToken      String           @unique
+  capacity     Int
+  status       TableStatus      @default(AVAILABLE)
+  section      String?
+  isActive     Boolean          @default(true)
+  restaurantId Int
+  restaurant   Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders       Order[]
+  requests     ServiceRequest[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
+  @@unique([restaurantId, tableNumber]) // table 5 can exist in 2 restaurants
+  @@index([restaurantId])
   @@index([status])
-  @@index([section])
-  @@index([isActive])
 }
 
 model MenuCategory {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
-  description String?
-  sortOrder   Int        @default(0)
-  isActive    Boolean    @default(true)
-  items       MenuItem[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           Int          @id @default(autoincrement())
+  name         String
+  description  String?
+  sortOrder    Int          @default(0)
+  isActive     Boolean      @default(true)
+  restaurantId Int
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items        MenuItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
   @@index([sortOrder])
-  @@index([isActive])
 }
 
 model MenuItem {
@@ -89,34 +151,63 @@ model MenuItem {
   isAvailable Boolean      @default(true)
   sortOrder   Int          @default(0)
   categoryId  Int
-  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  orderItems  OrderItem[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  @@unique([categoryId, name])
   @@index([categoryId])
   @@index([isAvailable])
-  @@index([sortOrder])
-  @@index([name])
-  @@unique([categoryId, name])
 }
 
+// Customer places an order from their phone
+model Order {
+  id           Int         @id @default(autoincrement())
+  status       OrderStatus @default(PENDING)
+  total        Decimal     @db.Decimal(10, 2)
+  notes        String?
+  tableId      Int
+  table        Table       @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  restaurantId Int
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  items        OrderItem[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([tableId])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model OrderItem {
+  id         Int      @id @default(autoincrement())
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2) // snapshot price at time of order
+  notes      String?
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId Int
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+}
+
+// Customer calls waiter, asks for bill etc.
 model ServiceRequest {
   id           Int           @id @default(autoincrement())
   requestType  RequestType
   status       RequestStatus @default(PENDING)
-  priority     Int           @default(1)
   note         String?
   tableId      Int
-  table        Table         @relation(fields: [tableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  table        Table         @relation(fields: [tableId], references: [id], onDelete: Restrict)
   resolvedById Int?
-  resolvedBy   User?         @relation("ResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  resolvedBy   Staff?        @relation("ResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  resolvedAt   DateTime?
 
-  @@index([status])
   @@index([tableId])
-  @@index([createdAt])
-  @@index([priority])
+  @@index([status])
   @@index([requestType])
 }
