@@ -1,8 +1,11 @@
-import 'dotenv/config';
+import http from 'http';
 import app from './app.js';
 import { env } from './config/env.js';
-import { logger } from './config/logger.js';
+import { initializeSocket } from './config/socket.js';
 
-app.listen(env.port, () => {
-  logger.info(`Server running on http://localhost:${env.port}`);
+const server = http.createServer(app);
+initializeSocket(server);
+
+server.listen(env.port, () => {
+  console.log(`Server running on http://localhost:${env.port}`);
 });
