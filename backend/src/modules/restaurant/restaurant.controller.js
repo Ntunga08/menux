@@ -1,11 +1,15 @@
-import { getRestaurantProfile } from './restaurant.service.js';
-import { sendSuccess } from '../../utils/response.js';
+import { createRestaurant
+        getRestaurant,
+        getAllRestaurants,
+        updateRestaurant,
+        deleteRestaurant,
+        getRestaurantWithDetails,
+        getRestaurantByOwner,
+        updateRestaurantStatus,
+        restaurantExists
 
-export const getRestaurant = async (req, res, next) => {
-  try {
-    const data = await getRestaurantProfile();
-    return sendSuccess(res, data, 'Restaurant profile loaded');
-  } catch (error) {
-    return next(error);
-  }
-};
+ } from './restaurant.service.js';
+
+ export const createRestaurantController = async(req ,)
+
+
