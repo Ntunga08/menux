@@ -25,7 +25,7 @@ SmartTable is a restaurant backend API for managing authentication, restaurant i
    ```env
    PORT=4000
    JWT_SECRET=your_jwt_secret
-   DATABASE_URL=postgresql://username:password@localhost:5433/smarttable
+   DATABASE_URL=postgresql://username:password@localhost:5434/smarttable
    ```
 4. Start PostgreSQL with Docker:
    ```bash
@@ -67,3 +67,5 @@ From `backend/`:
 
 - Required backend environment variables: `PORT`, `JWT_SECRET`, `DATABASE_URL`
 - Keep secrets in `.env` and do not commit them
+- For endpoint testing with Postman, see `backend/POSTMAN_TESTING.md`
+- For staff invite/password lifecycle, see `backend/STAFF_AUTH_FLOW.md`
