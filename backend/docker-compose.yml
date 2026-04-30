@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: gibesh2002
       POSTGRES_DB: smarttable
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
