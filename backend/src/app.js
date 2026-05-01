@@ -9,6 +9,7 @@ import ordersRoutes from './modules/orders/orders.routes.js';
 import requestsRoutes from './modules/requests/requests.routes.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
+
 const app = express();
 
 app.use(cors());
@@ -26,6 +27,7 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/tables', tablesRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/requests', requestsRoutes);
+
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
